@@ -19,6 +19,7 @@ type alias Model =
     { questionAnswer : ThreeNumber
     , playerAnswer : Maybe ThreeNumber
     , playerAnswerString : String
+    , compareResult : Maybe ThreeNumberCompareResult
     , error : Maybe String
     }
 
@@ -93,11 +94,54 @@ validateThreeNumberAllDifferent list =
         Err "数字が重複しています"
 
 
+type ThreeNumberCompareResult
+    = ThreeNumberCompareResult Eat Byte
+
+
+type Eat
+    = Eat Int
+
+
+type Byte
+    = Byte Int
+
+
+compareThreeNumber : ThreeNumber -> ThreeNumber -> ThreeNumberCompareResult
+compareThreeNumber (ThreeNumber a1 b1 c1) (ThreeNumber a2 b2 c2) =
+    let
+        eatCount =
+            [ a1 == a2, b1 == b2, c1 == c2 ]
+                |> List.map
+                    (\val ->
+                        if val then
+                            1
+
+                        else
+                            0
+                    )
+                |> List.sum
+
+        byteCount =
+            [ List.member a2 [ b1, c1 ], List.member b2 [ a1, c1 ], List.member c2 [ a1, b1 ] ]
+                |> List.map
+                    (\val ->
+                        if val then
+                            1
+
+                        else
+                            0
+                    )
+                |> List.sum
+    in
+    ThreeNumberCompareResult (Eat eatCount) (Byte byteCount)
+
+
 init : ( Model, Cmd Msg )
 init =
     ( { questionAnswer = ThreeNumber -1 -1 -1
       , playerAnswer = Nothing
       , playerAnswerString = ""
+      , compareResult = Nothing
       , error = Nothing
       }
     , generateRandomThreeNumber
@@ -126,7 +170,11 @@ update msg model =
         EnterPlayerAnswer ->
             case transformStringToThreeNumber model.playerAnswerString of
                 Ok playerAnswer ->
-                    ( { model | playerAnswer = Just playerAnswer, error = Nothing }, Cmd.none )
+                    let
+                        compareResult =
+                            compareThreeNumber model.questionAnswer playerAnswer
+                    in
+                    ( { model | playerAnswer = Just playerAnswer, compareResult = Just compareResult, error = Nothing }, Cmd.none )
 
                 Err error ->
                     ( { model | error = Just error }, Cmd.none )
@@ -141,6 +189,7 @@ view model =
     div []
         [ viewThreeNumber model.questionAnswer
         , viewPlayerAnswer model.playerAnswer
+        , viewCompareResult model.compareResult
         , viewPlayerAnswerInput
         , viewError model.error
         ]
@@ -156,6 +205,16 @@ viewPlayerAnswer maybeThreeNumber =
     case maybeThreeNumber of
         Just threeNumber ->
             viewThreeNumber threeNumber
+
+        Nothing ->
+            text ""
+
+
+viewCompareResult : Maybe ThreeNumberCompareResult -> Html msg
+viewCompareResult maybeCompareResult =
+    case maybeCompareResult of
+        Just (ThreeNumberCompareResult (Eat eat) (Byte byte)) ->
+            div [] [ text <| String.fromInt eat ++ "eat " ++ String.fromInt byte ++ "byte" ]
 
         Nothing ->
             text ""
