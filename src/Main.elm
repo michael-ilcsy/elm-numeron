@@ -4,7 +4,7 @@ import Array exposing (Array)
 import Browser
 import Hotkeys exposing (onEnter)
 import Html exposing (Html, div, h1, input, table, td, text, th, tr)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, value)
 import Html.Events exposing (onInput)
 import List.Extra
 import Random
@@ -17,9 +17,8 @@ import Random.Array
 
 type alias Model =
     { questionAnswer : ThreeNumber
-    , playerAnswer : Maybe ThreeNumber
     , playerAnswerString : String
-    , compareResult : Maybe ThreeNumberCompareResult
+    , compareResultHistories : List CompareResultHistory
     , error : Maybe String
     }
 
@@ -106,6 +105,10 @@ type Byte
     = Byte Int
 
 
+type CompareResultHistory
+    = CompareResultHistory ThreeNumber ThreeNumberCompareResult
+
+
 compareThreeNumber : ThreeNumber -> ThreeNumber -> ThreeNumberCompareResult
 compareThreeNumber (ThreeNumber a1 b1 c1) (ThreeNumber a2 b2 c2) =
     let
@@ -139,9 +142,8 @@ compareThreeNumber (ThreeNumber a1 b1 c1) (ThreeNumber a2 b2 c2) =
 init : ( Model, Cmd Msg )
 init =
     ( { questionAnswer = ThreeNumber -1 -1 -1
-      , playerAnswer = Nothing
       , playerAnswerString = ""
-      , compareResult = Nothing
+      , compareResultHistories = []
       , error = Nothing
       }
     , generateRandomThreeNumber
@@ -173,8 +175,14 @@ update msg model =
                     let
                         compareResult =
                             compareThreeNumber model.questionAnswer playerAnswer
+
+                        latestCompareResultHistory =
+                            CompareResultHistory playerAnswer compareResult
+
+                        newCompareResultHistories =
+                            Array.toList <| Array.push latestCompareResultHistory <| Array.fromList model.compareResultHistories
                     in
-                    ( { model | playerAnswer = Just playerAnswer, compareResult = Just compareResult, error = Nothing }, Cmd.none )
+                    ( { model | compareResultHistories = newCompareResultHistories, error = Nothing, playerAnswerString = "" }, Cmd.none )
 
                 Err error ->
                     ( { model | error = Just error }, Cmd.none )
@@ -187,43 +195,26 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ viewThreeNumber model.questionAnswer
-        , viewPlayerAnswer model.playerAnswer
-        , viewCompareResult model.compareResult
-        , viewPlayerAnswerInput
+        [ h1 [] [ viewThreeNumber model.questionAnswer ]
+        , viewPlayerAnswerInput model.playerAnswerString
         , viewError model.error
-        , viewAnswerHistoryTable
+        , viewAnswerHistoryTable model.compareResultHistories
         ]
 
 
 viewThreeNumber : ThreeNumber -> Html msg
 viewThreeNumber (ThreeNumber one two three) =
-    h1 [] [ text <| String.fromInt one ++ String.fromInt two ++ String.fromInt three ]
+    text <| String.fromInt one ++ String.fromInt two ++ String.fromInt three
 
 
-viewPlayerAnswer : Maybe ThreeNumber -> Html msg
-viewPlayerAnswer maybeThreeNumber =
-    case maybeThreeNumber of
-        Just threeNumber ->
-            viewThreeNumber threeNumber
-
-        Nothing ->
-            text ""
+viewCompareResult : ThreeNumberCompareResult -> Html msg
+viewCompareResult (ThreeNumberCompareResult (Eat eat) (Byte byte)) =
+    text <| String.fromInt eat ++ "eat " ++ String.fromInt byte ++ "byte"
 
 
-viewCompareResult : Maybe ThreeNumberCompareResult -> Html msg
-viewCompareResult maybeCompareResult =
-    case maybeCompareResult of
-        Just (ThreeNumberCompareResult (Eat eat) (Byte byte)) ->
-            div [] [ text <| String.fromInt eat ++ "eat " ++ String.fromInt byte ++ "byte" ]
-
-        Nothing ->
-            text ""
-
-
-viewPlayerAnswerInput : Html Msg
-viewPlayerAnswerInput =
-    input [ onEnter EnterPlayerAnswer, onInput InputPlayerAnswer ] []
+viewPlayerAnswerInput : String -> Html Msg
+viewPlayerAnswerInput v =
+    input [ onEnter EnterPlayerAnswer, onInput InputPlayerAnswer, value v ] []
 
 
 viewError : Maybe String -> Html msg
@@ -236,17 +227,22 @@ viewError maybeError =
             text ""
 
 
-viewAnswerHistoryTable : Html Msg
-viewAnswerHistoryTable =
+viewAnswerHistoryTable : List CompareResultHistory -> Html Msg
+viewAnswerHistoryTable compareResultHistories =
     table []
-        [ tr []
+        (tr []
             [ th [] [ text "解答" ]
             , th [] [ text "結果" ]
             ]
-        , tr []
-            [ td [] [ text "930" ]
-            , td [] [ text "1eat 0byte" ]
-            ]
+            :: List.map viewAnswerHistoryTableRow compareResultHistories
+        )
+
+
+viewAnswerHistoryTableRow : CompareResultHistory -> Html Msg
+viewAnswerHistoryTableRow (CompareResultHistory threeNumber threeNumberCompareResult) =
+    tr []
+        [ td [] [ viewThreeNumber threeNumber ]
+        , td [] [ viewCompareResult threeNumberCompareResult ]
         ]
 
 
