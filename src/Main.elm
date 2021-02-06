@@ -3,7 +3,7 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Hotkeys exposing (onEnter)
-import Html exposing (Html, div, h1, input, text)
+import Html exposing (Html, div, h1, input, table, td, text, th, tr)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onInput)
 import List.Extra
@@ -192,6 +192,7 @@ view model =
         , viewCompareResult model.compareResult
         , viewPlayerAnswerInput
         , viewError model.error
+        , viewAnswerHistoryTable
         ]
 
 
@@ -233,6 +234,20 @@ viewError maybeError =
 
         Nothing ->
             text ""
+
+
+viewAnswerHistoryTable : Html Msg
+viewAnswerHistoryTable =
+    table []
+        [ tr []
+            [ th [] [ text "解答" ]
+            , th [] [ text "結果" ]
+            ]
+        , tr []
+            [ td [] [ text "930" ]
+            , td [] [ text "1eat 0byte" ]
+            ]
+        ]
 
 
 

@@ -20,11 +20,16 @@ h1 {
     font-size: 30px;
 }
 
-img {
-    margin: 20px 0;
-    max-width: 200px;
-}
-
 .error {
     color: red;
+}
+
+table {
+    margin: auto;
+    border: 1px solid black;
+    margin-top: 5px;
+}
+
+td, th {
+    border: 1px solid black;
 }
