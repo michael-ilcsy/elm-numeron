@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Array exposing (Array)
 import Browser
@@ -6,9 +6,12 @@ import Hotkeys exposing (onEnter)
 import Html exposing (Html, button, div, h1, input, table, td, text, th, tr)
 import Html.Attributes exposing (class, disabled, value)
 import Html.Events exposing (onClick, onInput)
+import Json.Decode as D
+import Json.Encode as E
 import List.Extra
 import Random
 import Random.Array
+import Round
 
 
 
@@ -16,11 +19,19 @@ import Random.Array
 
 
 type alias Model =
-    { gameStatus : GameStatus
+    { gameRecord : GameRecord
+    , gameStatus : GameStatus
     , questionAnswer : ThreeNumber
     , playerAnswerString : String
     , compareResultHistories : List CompareResultHistory
     , error : Maybe String
+    }
+
+
+type alias GameRecord =
+    { playCount : Int
+    , highScore : Int
+    , totalScore : Int
     }
 
 
@@ -150,9 +161,19 @@ isCorrectAnswer (ThreeNumberCompareResult (Eat eat) _) =
     eat == 3
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { gameStatus = Playing
+init : E.Value -> ( Model, Cmd Msg )
+init flags =
+    ( { gameRecord =
+            case D.decodeValue gameRecordDecoder flags of
+                Ok gameRecord ->
+                    gameRecord
+
+                Err _ ->
+                    { totalScore = 0
+                    , highScore = 0
+                    , playCount = 0
+                    }
+      , gameStatus = Playing
       , questionAnswer = ThreeNumber -1 -1 -1
       , playerAnswerString = ""
       , compareResultHistories = []
@@ -160,6 +181,26 @@ init =
       }
     , generateRandomThreeNumber
     )
+
+
+port setStorage : E.Value -> Cmd msg
+
+
+encodeGameRecord : GameRecord -> E.Value
+encodeGameRecord gameRecord =
+    E.object
+        [ ( "playCount", E.int gameRecord.playCount )
+        , ( "highScore", E.int gameRecord.highScore )
+        , ( "totalScore", E.int gameRecord.totalScore )
+        ]
+
+
+gameRecordDecoder : D.Decoder GameRecord
+gameRecordDecoder =
+    D.map3 GameRecord
+        (D.field "playCount" D.int)
+        (D.field "highScore" D.int)
+        (D.field "totalScore" D.int)
 
 
 
@@ -194,20 +235,43 @@ update msg model =
 
                         newCompareResultHistories =
                             Array.toList <| Array.push latestCompareResultHistory <| Array.fromList model.compareResultHistories
-                    in
-                    ( { model
-                        | compareResultHistories = newCompareResultHistories
-                        , error = Nothing
-                        , playerAnswerString = ""
-                        , gameStatus =
-                            if isCorrectAnswer compareResult then
-                                Ready
 
-                            else
-                                Playing
-                      }
-                    , Cmd.none
-                    )
+                        newModel =
+                            { model
+                                | compareResultHistories = newCompareResultHistories
+                                , error = Nothing
+                                , playerAnswerString = ""
+                            }
+                    in
+                    if isCorrectAnswer compareResult then
+                        let
+                            currentScore =
+                                List.length newCompareResultHistories
+
+                            newGameRecord =
+                                { totalScore = model.gameRecord.totalScore + currentScore
+                                , highScore =
+                                    if model.gameRecord.highScore == 0 then
+                                        currentScore
+
+                                    else
+                                        Basics.min model.gameRecord.highScore currentScore
+                                , playCount = model.gameRecord.playCount + 1
+                                }
+                        in
+                        ( { newModel
+                            | gameStatus = Ready
+                            , gameRecord = newGameRecord
+                          }
+                        , setStorage <| encodeGameRecord newGameRecord
+                        )
+
+                    else
+                        ( { newModel
+                            | gameStatus = Playing
+                          }
+                        , Cmd.none
+                        )
 
                 Err error ->
                     ( { model | error = Just error }, Cmd.none )
@@ -228,7 +292,7 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ h1 [] [ viewThreeNumber model.questionAnswer ]
+        [ div [] [ viewGameRecord model.gameRecord ]
         , div []
             [ viewPlayerAnswerInput model
             , viewResetButton model.gameStatus
@@ -246,6 +310,39 @@ viewThreeNumber (ThreeNumber one two three) =
 viewCompareResult : ThreeNumberCompareResult -> Html msg
 viewCompareResult (ThreeNumberCompareResult (Eat eat) (Byte byte)) =
     text <| String.fromInt eat ++ "eat " ++ String.fromInt byte ++ "byte"
+
+
+viewGameRecord : GameRecord -> Html msg
+viewGameRecord gameRecord =
+    let
+        highScore =
+            if gameRecord.highScore == 0 then
+                "なし"
+
+            else
+                String.fromInt gameRecord.highScore
+
+        averageScore =
+            if gameRecord.playCount == 0 then
+                "なし"
+
+            else
+                toFloat gameRecord.totalScore
+                    / toFloat gameRecord.playCount
+                    |> Round.round 2
+    in
+    div []
+        [ div []
+            [ text <|
+                "ハイスコア: "
+                    ++ highScore
+            ]
+        , div []
+            [ text <|
+                "平均スコア: "
+                    ++ averageScore
+            ]
+        ]
 
 
 viewPlayerAnswerInput : { a | playerAnswerString : String, gameStatus : GameStatus } -> Html Msg
@@ -302,11 +399,11 @@ viewAnswerHistoryTableRow (CompareResultHistory threeNumber threeNumberCompareRe
 ---- PROGRAM ----
 
 
-main : Program () Model Msg
+main : Program E.Value Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> init
+        , init = init
         , update = update
         , subscriptions = always Sub.none
         }
