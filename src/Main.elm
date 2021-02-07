@@ -3,9 +3,9 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Hotkeys exposing (onEnter)
-import Html exposing (Html, div, h1, input, table, td, text, th, tr)
-import Html.Attributes exposing (class, value)
-import Html.Events exposing (onInput)
+import Html exposing (Html, button, div, h1, input, table, td, text, th, tr)
+import Html.Attributes exposing (class, disabled, value)
+import Html.Events exposing (onClick, onInput)
 import List.Extra
 import Random
 import Random.Array
@@ -16,11 +16,17 @@ import Random.Array
 
 
 type alias Model =
-    { questionAnswer : ThreeNumber
+    { gameStatus : GameStatus
+    , questionAnswer : ThreeNumber
     , playerAnswerString : String
     , compareResultHistories : List CompareResultHistory
     , error : Maybe String
     }
+
+
+type GameStatus
+    = Playing
+    | Ready
 
 
 type ThreeNumber
@@ -139,9 +145,15 @@ compareThreeNumber (ThreeNumber a1 b1 c1) (ThreeNumber a2 b2 c2) =
     ThreeNumberCompareResult (Eat eatCount) (Byte byteCount)
 
 
+isCorrectAnswer : ThreeNumberCompareResult -> Bool
+isCorrectAnswer (ThreeNumberCompareResult (Eat eat) _) =
+    eat == 3
+
+
 init : ( Model, Cmd Msg )
 init =
-    ( { questionAnswer = ThreeNumber -1 -1 -1
+    ( { gameStatus = Playing
+      , questionAnswer = ThreeNumber -1 -1 -1
       , playerAnswerString = ""
       , compareResultHistories = []
       , error = Nothing
@@ -158,6 +170,7 @@ type Msg
     = GenerateRandomThreeNumber ThreeNumber
     | InputPlayerAnswer String
     | EnterPlayerAnswer
+    | GameReset
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -182,10 +195,30 @@ update msg model =
                         newCompareResultHistories =
                             Array.toList <| Array.push latestCompareResultHistory <| Array.fromList model.compareResultHistories
                     in
-                    ( { model | compareResultHistories = newCompareResultHistories, error = Nothing, playerAnswerString = "" }, Cmd.none )
+                    ( { model
+                        | compareResultHistories = newCompareResultHistories
+                        , error = Nothing
+                        , playerAnswerString = ""
+                        , gameStatus =
+                            if isCorrectAnswer compareResult then
+                                Ready
+
+                            else
+                                Playing
+                      }
+                    , Cmd.none
+                    )
 
                 Err error ->
                     ( { model | error = Just error }, Cmd.none )
+
+        GameReset ->
+            ( { model
+                | gameStatus = Playing
+                , compareResultHistories = []
+              }
+            , generateRandomThreeNumber
+            )
 
 
 
@@ -196,7 +229,10 @@ view : Model -> Html Msg
 view model =
     div []
         [ h1 [] [ viewThreeNumber model.questionAnswer ]
-        , viewPlayerAnswerInput model.playerAnswerString
+        , div []
+            [ viewPlayerAnswerInput model
+            , viewResetButton model.gameStatus
+            ]
         , viewError model.error
         , viewAnswerHistoryTable model.compareResultHistories
         ]
@@ -212,9 +248,25 @@ viewCompareResult (ThreeNumberCompareResult (Eat eat) (Byte byte)) =
     text <| String.fromInt eat ++ "eat " ++ String.fromInt byte ++ "byte"
 
 
-viewPlayerAnswerInput : String -> Html Msg
-viewPlayerAnswerInput v =
-    input [ onEnter EnterPlayerAnswer, onInput InputPlayerAnswer, value v ] []
+viewPlayerAnswerInput : { a | playerAnswerString : String, gameStatus : GameStatus } -> Html Msg
+viewPlayerAnswerInput model =
+    input
+        [ onEnter EnterPlayerAnswer
+        , onInput InputPlayerAnswer
+        , value model.playerAnswerString
+        , disabled <| model.gameStatus == Ready
+        ]
+        []
+
+
+viewResetButton : GameStatus -> Html Msg
+viewResetButton status =
+    case status of
+        Playing ->
+            text ""
+
+        Ready ->
+            button [ class "resetButton", onClick GameReset ] [ text "reset" ]
 
 
 viewError : Maybe String -> Html msg

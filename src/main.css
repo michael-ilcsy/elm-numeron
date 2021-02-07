@@ -33,3 +33,7 @@ table {
 td, th {
     border: 1px solid black;
 }
+
+.resetButton {
+    margin-left: 8px;
+}
