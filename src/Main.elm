@@ -3,8 +3,8 @@ port module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Hotkeys exposing (onEnter)
-import Html exposing (Html, button, div, h1, input, table, td, text, th, tr)
-import Html.Attributes exposing (class, disabled, value)
+import Html exposing (Html, button, div, input, label, table, td, text, th, tr)
+import Html.Attributes exposing (checked, class, disabled, name, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as D
 import Json.Encode as E
@@ -19,13 +19,19 @@ import Round
 
 
 type alias Model =
-    { gameRecord : GameRecord
+    { gameMode : GameMode
+    , gameRecord : GameRecord
     , gameStatus : GameStatus
     , questionAnswer : ThreeNumber
     , playerAnswerString : String
     , compareResultHistories : List CompareResultHistory
     , error : Maybe String
     }
+
+
+type GameMode
+    = NoItem
+    | Items
 
 
 type alias GameRecord =
@@ -163,7 +169,8 @@ isCorrectAnswer (ThreeNumberCompareResult (Eat eat) _) =
 
 init : E.Value -> ( Model, Cmd Msg )
 init flags =
-    ( { gameRecord =
+    ( { gameMode = NoItem
+      , gameRecord =
             case D.decodeValue gameRecordDecoder flags of
                 Ok gameRecord ->
                     gameRecord
@@ -212,6 +219,7 @@ type Msg
     | InputPlayerAnswer String
     | EnterPlayerAnswer
     | GameReset
+    | ChangeGameMode GameMode
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -284,6 +292,13 @@ update msg model =
             , generateRandomThreeNumber
             )
 
+        ChangeGameMode gameMode ->
+            ( { model
+                | gameMode = gameMode
+              }
+            , Cmd.none
+            )
+
 
 
 ---- VIEW ----
@@ -292,13 +307,40 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ div [] [ viewGameRecord model.gameRecord ]
+        [ viewGameSelectRadio model.gameMode
+        , div [] [ viewGameRecord model.gameRecord ]
         , div []
             [ viewPlayerAnswerInput model
             , viewResetButton model.gameStatus
             ]
         , viewError model.error
         , viewAnswerHistoryTable model.compareResultHistories
+        ]
+
+
+viewGameSelectRadio : GameMode -> Html Msg
+viewGameSelectRadio currentGameMode =
+    div []
+        [ label []
+            [ input
+                [ type_ "radio"
+                , name "gameSelect"
+                , onClick <| ChangeGameMode NoItem
+                , checked <| currentGameMode == NoItem
+                ]
+                []
+            , text "アイテム無し"
+            ]
+        , label []
+            [ input
+                [ type_ "radio"
+                , name "gameSelect"
+                , onClick <| ChangeGameMode Items
+                , checked <| currentGameMode == Items
+                ]
+                []
+            , text "アイテムあり"
+            ]
         ]
 
 
